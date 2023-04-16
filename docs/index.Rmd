@@ -1,0 +1,773 @@
+---
+title: |
+  Breast Cancer Analysis
+  ![](img/pink_ribbon.jpg){width=0.5in}  
+   
+author: "Steven Hernandez"
+date: "`r Sys.Date()`"
+
+
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Goal 
+
+
+This analysis will investigate potential factors towards a patient's survival of breast cancer.
+
+Such as: 
+
+* Protein Evaluation Levels
+* Type of Surgery
+* Stage of Cancer
+* Patient's Age
+
+Understanding what may influence survival could help more people struggling with breast cancer. 
+
+## Understanding the Data {.tabset}
+
+Data was obtained from [Kaggle](https://www.kaggle.com/datasets/kreeshrajani/breast-cancer-survival-dataset)
+
+### Libraries
+
+```{r libraries, message=FALSE, warning=FALSE}
+# Loading libraries necessary for analysis 
+library(tidyverse) 
+library(janitor)
+library(ggpubr) # Obtain function needed for Correlation Coefficient
+```
+
+### View the Data
+
+* View the first few rows to see how the data was organized
+
+```{r Open Data,message=FALSE}
+cancer_data <- read_csv('Breast_Cancer_Data.csv')
+```
+
+```{r Data Peak, echo=FALSE}
+knitr::kable((cancer_data[1:6,]), caption = "TABLE 1.1: Glimpse of the Data",digits = 2)
+
+```
+
+
+### Data's Structure 
+
+* View the column names
+
+```{r Structure, warning=FALSE}
+colnames(cancer_data)
+```
+
+
+* There are *334* different patients with *13* columns of patient information
+
+```{r Structure pt2, warning=FALSE}
+glimpse(cancer_data)
+```
+
+```{r, echo=FALSE,results='hide'}
+# Ensure data names contain valid characters
+cancer_data <- clean_names(cancer_data)
+```
+
+## Comparing Data Statistics
+
+The following tables highlight:
+
+* The amount of patients  
+* Average expression levels of Proteins 1 - 4  
+* Percentage of Patients alive  
+* Amount of patients whose survival status is unknown   
+* Percentage highlighting the amount of cases of stages 1-3  
+
+```{r,message=FALSE,warning=FALSE, echo=FALSE}
+Overall_stats <- data.frame(count = length(cancer_data$age), 
+                            protein1_mean = mean(cancer_data$protein1),
+                            protein2_mean = mean(cancer_data$protein2),
+                            protein3_mean = mean(cancer_data$protein3),
+                            protein4_mean = mean(cancer_data$protein4),
+                            survival_rate = paste0(round(length(which(cancer_data$patient_status == 'Alive')) / 
+                                            length(cancer_data$patient_status)*100,2),"%"),
+                            unknown_status = length(which(cancer_data$patient_status == "Unknown")),
+                            stage1_percent  = paste0(round(length(which(cancer_data$tumour_stage == 'I'))
+                                                    /length(cancer_data$tumour_stage)*100,0),"%"),
+                            stage2_percent  = paste0(round(length(which(cancer_data$tumour_stage == 'II'))
+                                                    / length(cancer_data$tumour_stage)*100,0),"%"),
+                            stage3_percent  = paste0(round(length(which(cancer_data$tumour_stage == 'III'))
+                                                    / length(cancer_data$tumour_stage)*100,0),"%"))
+```
+
+
+* The following table shows the statistics between **all 334 patients**:
+
+
+```{r,echo=FALSE}
+
+p  <- Overall_stats
+colnames(p) = c("Patients", "Protein 1", "Protein 2", "Protein 3",
+                "Protein 4", "Survival Rate", "Unknown", "Stage I",
+                "Stage II", "Stage III")
+
+knitr::kable(p, caption = "TABLE 2.1: Data Set Statistics",digits = 2)
+
+```
+
+```{r Yearly Stats, echo=FALSE, results='hide'}
+year_stats <- cancer_data %>% 
+  group_by(surgery_year) %>% 
+  summarize(Patients = n(), "Protein 1" = mean(protein1),  "Protein 2" = mean(protein2),
+            "Protein 3" = mean(protein3),  "Protein 4" = mean(protein4),
+            "Survival Rate" = paste0(round(length(which(patient_status == 'Alive')) / 
+                                            length(patient_status)*100,2),"%"),
+            "Unknown" = length(which(patient_status == "Unknown")),
+            "Stage I"  = paste0(round(length(which(tumour_stage == 'I'))
+                                                    / length(tumour_stage)*100,0),"%"),
+            "Stage II"  = paste0(round(length(which(tumour_stage == 'II'))
+                                                    / length(tumour_stage)*100,0),"%"),
+            "Stage III"  = paste0(round(length(which(tumour_stage == 'III'))
+                                                    / length(tumour_stage)*100,0),"%"))
+```
+
+
+* Splitting the data by the *year* a patient had their surgery:
+
+
+```{r,echo=FALSE}
+
+colnames(year_stats)[1] <- "Surgery Year"
+knitr::kable((year_stats[,]), caption = "TABLE 2.2: Yearly Statistics",digits = 2)
+
+```
+
+Result:
+
+* The survival rate is consistent throughout the data  
+  * About 75%-77%  
+* 2018-2019 had similar percentages across stages 1-3  
+  * 2017’s difference possibly stems from smaller pool of patients
+* The Patients whose status is unknown is spread unevenly   
+  * Lack of information in data set   
+
+Future analysis needed to grasp the difference between the Protein expression levels throughout the years.
+
+## Comparing Protein Expression Levels {.tabset}
+
+The following graphs' axis are the patient's **expression levels** for two different proteins 
+
+* Expression Levels: State how proteins are *maintained* and *changed*  
+* Goal: To identify if there is a relationship between 2 Proteins that can help identify a patient’s survival 
+
+
+
+### Protein 1 vs 2{.tabset}
+
+#### Chart
+```{r Protein 1 vs 2 Chart, echo=FALSE, message=FALSE}
+ggplot(data = cancer_data,mapping= aes(x = protein1,y = protein2)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 1 & Protein 2",
+       x = "Protein 1",
+       y = "Protein 2", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+* Protein 1 and Protein 2 have no significant positive correlation
+  * R Value: **0.24**
+    * The closer to 1 or -1 , the stronger the correlation
+  * The p value indicates this is a significantly insignificant result
+* Although there are no deceased patients when both the proteins are low, the lack of a significant correlation makes these findings unreliable. 
+
+
+#### Code
+```{Protein 1 vs 2 Code}
+ggplot(data = cancer_data,mapping= aes(x = protein1,y = protein2)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 1 & Protein 2",
+       x = "Protein 1",
+       y = "Protein 2", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+### Protein 1 vs 3{.tabset}
+
+#### Chart
+
+```{r Protein1 vs 3 Chart, echo=FALSE, message=FALSE}
+ggplot(data = cancer_data,mapping = aes(x = protein1,y=protein3)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 1 & Protein 3",
+       x = "Protein 1",
+       y = "Protein 3", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+* Protein 1 and Protein 3 have no significant negative correlation
+  * R Value: **-0.13**  
+  * The p value indicates this is a significantly insignificant result  
+* Although there are no deceased patients when protein 1 is low and protein 3 is high, the lack of a significant correlation makes these findings unreliable. 
+
+
+#### Code
+
+```{Protein1 vs 3 Code}
+ggplot(data = cancer_data,mapping = aes(x = protein1,y=protein3)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 1 & Protein 3",
+       x = "Protein 1",
+       y = "Protein 3", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+
+### Protein 1 vs 4{.tabset}
+
+#### Chart
+
+```{r Protein 1 vs 4 Chart, echo=FALSE, message=FALSE}
+ggplot(data = cancer_data, mapping = aes(x = protein1,y=protein4)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 1 & Protein 4",
+       x = "Protein 1",
+       y = "Protein 4", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+* Protein 1 and Protein 3 have an insignificant positive correlation
+  * R Value: **0.28**
+  * The p value indicates this is a significantly insignificant result
+* Although there are no deceased patients when both proteins are low, the lack of a significant correlation makes these findings unreliable. 
+
+#### Code
+
+```{Protein 1 vs 4 Code}
+ggplot(data = cancer_data, mapping = aes(x = protein1,y=protein4)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 1 & Protein 4",
+       x = "Protein 1",
+       y = "Protein 4", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+### Protein 2 vs 3{.tabset}
+
+#### Chart
+
+```{r Protein 2 vs 3 Chart, echo=FALSE, message=FALSE}
+ggplot(data = cancer_data, mapping = aes(x = protein2,y=protein3)) +  
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 2 & Protein 3",
+       x = "Protein 2",
+       y = "Protein 3", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+* Protein 2 and Protein 3 have an insignificant negative correlation
+  * R Value: **-0.42**
+  * The p value indicates this is a significantly insignificant result
+* The Patient Status is scattered throughout the plot
+
+
+#### Code
+
+```{Protein 2 vs 3 Code}
+ggplot(data = cancer_data, mapping = aes(x = protein2,y=protein3)) +  
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 2 & Protein 3",
+       x = "Protein 2",
+       y = "Protein 3", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+### Protein 2 vs 4{.tabset}
+
+#### Chart
+
+```{r Protein 2 vs 4 Chart, echo=FALSE, message=FALSE}
+ggplot(data = cancer_data, mapping = aes(x = protein2,y=protein4)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 2 & Protein 4",
+       x = "Protein 2",
+       y = "Protein 4", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+* Protein 2 and Protein 4 have an insignificant positive correlation
+  * R Value: **0.088** 
+* The p value indicates this is *unreliable* result
+  * Some form of bias in data
+
+
+#### Code
+
+```{Protein 2 vs 4 Code}
+ggplot(data = cancer_data, mapping = aes(x = protein2,y=protein4)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 2 & Protein 4",
+       x = "Protein 2",
+       y = "Protein 4", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+
+### Protein 3 vs 4{.tabset}
+
+#### Chart
+
+```{r Protein 3 vs 4 Chart, echo=FALSE, message=FALSE}
+ggplot(data = cancer_data, mapping = aes(x = protein3,y=protein4)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 3 & Protein 4",
+       x = "Protein 3",
+       y = "Protein 4", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+* Protein 3 and Protein 4 have an insignificant positive correlation
+  * R Value: **0.065** 
+* The p value indicates this is *unreliable* result
+  * Some form of bias in data
+
+#### Code
+
+```{Protein 3 vs 4 Code}
+ggplot(data = cancer_data, mapping = aes(x = protein3,y=protein4)) +
+  geom_point(aes(color = patient_status)) +
+  geom_smooth(method = lm, se = FALSE) +
+  stat_cor(method = "pearson", label.x = -1, label.y = 3) +
+  labs(title = "Expression Levels Between Protein 3 & Protein 4",
+       x = "Protein 3",
+       y = "Protein 4", 
+       color = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+### Conclusion
+
+* The Protein Expression levels hold **no strong correlation** with each other
+  * Cannot be used to predict a patient’s expression levels
+  * **Unreliable** patterns such as:
+    * No deceased patients when protein 1 and protein 2 are low
+    * Could be sample bias
+  * No discernible pattern with patient survival 
+
+
+## Surgery Type{.tabset}
+
+Next is an attempt to identify whether the **type** of surgery  patient their **survival** later in life 
+
+  * Try to see if the cancer’s stage affects the results 
+
+
+### Chart 
+
+```{r Surgery Type Chart, echo=FALSE}
+# Grouped  bar chart showing the patient status for each surgery type divided by cancer stage
+ggplot(data = cancer_data, aes(x = tumour_stage))+
+  geom_bar(aes(fill = patient_status),position = 'dodge') + 
+  geom_text(aes(label = after_stat(count),group = patient_status), stat ="count", 
+            size = 3, position = position_dodge(0.8), vjust=-0.5) +
+  facet_wrap(~surgery_type,scales = 'free')  + 
+  ylim(0,45) +
+  labs(title = "Surgeries Performed at Different Stages of Cancer",
+       subtitle = "Split By Patient Survival",
+       x = "Tumor Stage",
+       y = "Amount of Patients", 
+       fill = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+
+### Code
+
+```
+# Grouped  bar chart showing the patient status for each surgery type divided by cancer stage
+ggplot(data = cancer_data, aes(x = tumour_stage))+
+  geom_bar(aes(fill = patient_status),position = 'dodge') + 
+  geom_text(aes(label = after_stat(count),group = patient_status), stat ="count", 
+            size = 3, position = position_dodge(0.8), vjust=-0.5) +
+  facet_wrap(~surgery_type,scales = 'free')  + 
+  ylim(0,45) +
+  labs(title = "Surgeries Performed at Different Stages of Cancer",
+       subtitle = "Split By Patient Survival",
+       x = "Tumor Stage",
+       y = "Amount of Patients", 
+       fill = "Patient Status") +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"))
+```
+## {-}
+
+**Stage 1:**
+
+* *Lumpectomy* had the **most** patients alive and tied for the least deceased  
+* *Modified Radical Mastectomy* most concerning when 5 alive and 2 deceased  
+  * Seems unreliable
+
+**Stage 2:**
+
+* *Simple Mastectomy* had **38** alive patients, while having the *least deceased* (5)  
+* *Modified Radical Mastectomy* had same amount of alive patients, but almost *twice* as many later deceased (9)  
+* *Lumpectomy* had **least** patients alive (29), while having concerning amount of deaths (7)  
+* Other types of surgeries are the most concerning with 17 patients dead and 39 alive
+
+**Stage 3:**
+
+* *Lumpectomy* remarkably had **no** deaths, with 8 alive  
+* *Simple Mastectomy* is **unreliable** with 5 alive and 4 dead  
+* *Modified Radical Mastectomy* has a good ratio for an advanced cancer stage  
+  * 29  Alive, 9 deceased
+
+**Conclusion**:
+
+The type of surgery seems to correlate with the likelihood a patient will live years after surgery.
+
+Some surgeries perform far better in different stages:
+
+* **Lumpectomy** is the most reliable for stage 1, and great for stage 3  
+* **Simple Mastectomy** has favorable results for stage 2  
+* **Modified Radical Mastectomy** has consistent patterns for stage 2 & 3  
+
+**Limitation**:
+
+The data set doesn’t specify if the patient’s cause of death is related to the cancer **or** the result of something else.
+
+* Further analysis is needed for clarification
+
+
+## Cancer Stages Spread Across Ages{.tabset}
+
+
+The goal is to identify how patient’s ages spread in the data set. 
+
+* What ages have the most instances of cancer   
+* How different stages of cancer is spread by age  
+* Identify patterns between patients that are alive or deceased  
+
+
+### Chart 
+
+```{r Cancer Stage Age Chart, echo=FALSE}
+cancer_data %>% 
+  filter(patient_status != 'Unknown') %>% 
+  ggplot() +
+    geom_histogram(aes(x = age, fill = tumour_stage),position = position_dodge(4),
+                    binwidth = 5) +
+    labs(title = "Age Range of Patients",
+         subtitle = "Split By Tumor Stage",
+         x = "Age",
+         y = "Amount of Patients", 
+         fill = "Tumor Stage",
+         caption = "Bin Range of 5") +
+    theme(plot.background = element_rect(fill = '#FBD7CD'),
+          legend.background = element_rect(fill = "#FBD7CD"),
+          plot.caption.position = 'plot') +
+    facet_wrap(~patient_status)
+```
+
+
+### Code
+
+```
+cancer_data %>% 
+  filter(patient_status != 'Unknown') %>% 
+  ggplot() +
+    geom_histogram(aes(x = age, fill = tumour_stage),position = position_dodge(4),
+                    binwidth = 5) +
+    labs(title = "Age Range of Patients",
+         subtitle = "Split By Tumor Stage",
+         x = "Age",
+         y = "Amount of Patients", 
+         fill = "Tumor Stage",
+         caption = "Bin Range of 5") +
+    theme(plot.background = element_rect(fill = '#FBD7CD'),
+          legend.background = element_rect(fill = "#FBD7CD"),
+          plot.caption.position = 'plot') +
+    facet_wrap(~patient_status)
+```
+## {-}
+
+There is a notable bell curve in the data:  
+
+* Most of the data is between ages 40-80 for both groups  
+
+Patients that are **alive**:  
+
+* Most cases between ages 40-80 see Stage 2 as the most common diagnosed   
+  * Stage 1 and 3 are both prominent between 40-80 as well
+* Cases rise as patients grow closer to 60, but decrease the older patients are
+
+Patients that are **deceased**:
+
+* Very rarely did a patient die from Stage 1, regardless of age. 
+* Most cases of death were patients diagnosed with Stage 2 or 3
+  * Stage 3 being prominent between late 40s and late 50s
+* Rise in cases between late 40s and 70s, but a significant decrease afterwards. 
+
+
+## Patient Survival By Surgery Year{.tabset}
+
+Next, it is to investigate whether the year a patient had their surgery would affect their chances of a future.
+
+### Chart
+
+```{r Survival Year Heat Map, echo=FALSE, message=FALSE}
+cancer_data %>% 
+  group_by(surgery_year,patient_status) %>% 
+  summarize(count = n()) %>% 
+  ggplot(mapping =aes(x = surgery_year, y = patient_status,fill = count)) +
+    geom_tile(color = 'black', lwd = 1.5,) +
+    geom_text(aes(label = count), color = 'black',size = 6) +
+    coord_fixed() +
+  scale_fill_distiller(palette = 'OrRd',direction = +1) +
+  labs(title = "Current Patient Survival Split By Year",
+       y = "Patient Status",
+       x = "Year of Surgery", 
+       fill = "Number of Patients",
+       caption = 'Some patients whereabouts are unknown') +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        panel.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"),
+        plot.caption.position = 'plot')
+```
+
+Although 2018 seemed to perform the best, there are a few things to consider:
+
+1. There are far more patients in the data set whose surgery took place in 2018
+    * Table 2.2: 
+      * **2017** : **61**	Patients  
+      * **2018** : **152** Patients 
+      * **2019** : **121** Patients 
+2. The survival rate is almost the same, regardless of the amount of patients
+    * Table 2.2: 
+      * **2018** : **75.41%** 
+      * **2018** : **77.63%** 
+      * **2018** : **75.21%** 
+
+It is unlikely the year a patient had their surgery would affect their chances of survival.
+
+### Code 
+
+```
+cancer_data %>% 
+  group_by(surgery_year,patient_status) %>% 
+  summarize(count = n()) %>% 
+  ggplot(mapping =aes(x = surgery_year, y = patient_status,fill = count)) +
+    geom_tile(color = 'black', lwd = 1.5,) +
+    geom_text(aes(label = count), color = 'black',size = 6) +
+    coord_fixed() +
+  scale_fill_distiller(palette = 'OrRd',direction = +1) +
+  labs(title = "Current Patient Survival Split By Year",
+       y = "Patient Status",
+       x = "Year of Surgery", 
+       fill = "Number of Patients",
+       caption = 'Some patients whereabouts are unknown') +
+  theme(plot.background = element_rect(fill = '#FBD7CD'),
+        panel.background = element_rect(fill = '#FBD7CD'),
+        legend.background = element_rect(fill = "#FBD7CD"),
+        plot.caption.position = 'plot')
+```
+
+
+# Breast Cancer Dashboard
+
+Summarizes key points discussed:
+
+* Stages of cancer between ages  
+* Scatter plots for protein expression levels
+* Survival rate of different surgeries
+
+Additionally, filters allow for a more in-depth look at the data
+
+* Most filters are connected between all three charts
+* Age Range applies to *Different Stages of Cancer Split By Age* & *Protein Expression Levels*       
+
+Allows for user to specify:
+
+* Age range
+* Stage of Cancer
+* Type of Breast Cancer
+* Patient's Status (Alive, Dead, or Unknown)  
+
+
+###################################
+<div class='tableauPlaceholder' id='viz1681484440912' style='position: relative'><noscript><a href='#'>
+<img alt='Breast Cancer Dashboard ' src='https:&#47;&#47;public.tableau.com&#47;static&#47;images&#47;Br&#47;BreastCancerData_16810479304800&#47;BreastCancerDashboard&#47;1_rss.png' style='border: none' />
+</a>
+</noscript>
+<object class='tableauViz'  style='display:none;'>
+<param name='host_url' value='https%3A%2F%2Fpublic.tableau.com%2F' /> 
+<param name='embed_code_version' value='3' /> 
+<param name='site_root' value='' />
+<param name='name' value='BreastCancerData_16810479304800&#47;BreastCancerDashboard' />
+<param name='tabs' value='no' />
+<param name='toolbar' value='yes' />
+<param name='static_image' value='https:&#47;&#47;public.tableau.com&#47;static&#47;images&#47;Br&#47;BreastCancerData_16810479304800&#47;BreastCancerDashboard&#47;1.png' /> 
+<param name='animate_transition' value='yes' />
+<param name='display_static_image' value='yes' />
+<param name='display_spinner' value='yes' />
+<param name='display_overlay' value='yes' />
+<param name='display_count' value='yes' />
+<param name='language' value='en-US' />
+</object>
+</div>             
+###########################################
+
+```{js dashboard, echo=FALSE}
+var divElement = document.getElementById('viz1681484440912');
+var vizElement = divElement.getElementsByTagName('object')[0];
+if ( divElement.offsetWidth > 800 ) {         
+  vizElement.style.minWidth='420px';
+  vizElement.style.maxWidth='650px';
+  vizElement.style.width='100%';
+  vizElement.style.minHeight='587px';
+  vizElement.style.maxHeight='887px';
+  vizElement.style.height=(divElement.offsetWidth*0.75)+'px';
+} 
+else if ( divElement.offsetWidth > 500 ) { 
+  vizElement.style.minWidth='420px';
+  vizElement.style.maxWidth='650px';
+  vizElement.style.width='100%';
+  vizElement.style.minHeight='587px';
+  vizElement.style.maxHeight='887px';
+  vizElement.style.height=(divElement.offsetWidth*0.75)+'px';
+} 
+else { 
+  vizElement.style.width='100%';vizElement.style.height='1827px';
+}
+var scriptElement = document.createElement('script');
+scriptElement.src = 'https://public.tableau.com/javascripts/api/viz_v1.js';                    vizElement.parentNode.insertBefore(scriptElement, vizElement);        
+```
+
+
+
+The Histology filter helps further  identify any patterns among the different surgeries
+
+### {.tabset}
+#### **Stage 1**
+
+* Lumpectomy had two patients deceased for Stage 1
+  * Both are from an Infiltrating Ductal Carcinoma
+  * 3-0 for Infiltrating Lobular Carcinoma & 2-0 Mucinous Carcinoma 
+* Modified Radical Masectomy performance dependent on type of cancer:
+  * Infiltrating Ductal Carcinoma: 4-2
+  * Mucinous Carcinoma : 1-0
+
+#### **Stage 2**
+
+* Previously stated *Simple Mastectomy* had **38** alive patients, while having the *least deceased* (5)
+  * Filter showed it performs best against Infiltrating Ductal Carcinoma (21-4) but not as impressive against Infiltrating Lobular Carcinoma
+    * *Simple Mastectomy* : 7-1
+    * *Modified Radical Mastectomy* : 13-1
+    * *Lumpectomy* : 7-1
+    
+* *Lumpectomy* was shown to have the  **least** patients alive (29), while having concerning amount of deaths (7)  
+  * Yet filters highlight its good performance against Infiltrating Ductal Carcinoma (21-4) & Infiltrating Lobular Carcinoma (7-1)
+  * Performed poorly against Mucinous Carcinoma (1-2)
+
+#### **Stage 3**
+
+* *Lumpectomy* had **no** deaths against Infiltrating Ductal Carcinoma & Infiltrating Lobular Carcinoma
+  * No patients had Mucinous Carcinoma for Stage 3
+* *Simple Mastectomy* is still **unreliable** against Infiltrating Ductal Carcinoma (4-4)
+  * Although against Infiltrating Lobular Carcinoma it had no deaths (1-0)
+* *Modified Radical Mastectomy* is great against Infiltrating Ductal Carcinoma (23-4)
+  * Conscerning against Infiltrating Lobular Carcinoma (6-5)
+
+#### **Conclusion**
+
+Utilizing filters allowed for a deeper analysis on the performances of different surgeries
+
+  * Highlights which surgeries were better for which type of breast cancer
+
+These factors seem to influence a patient's chances of survival post-surgery:
+
+* Different stages of cancer
+* The type of Breast Cancer 
+* The type of Surgery
+
+
+
+## Final Thoughts
+
+
+* It is unlikely the year a patient had their surgery would affect their chances of survival.
+  * The survival rate is consistent
+    * About 75%-77%  
+
+* The Protein Expression levels hold **no strong correlation** with each other
+  * Cannot be used to predict a patient’s expression levels
+  * No discernible pattern with patient survival 
+
+* Those with cancer are likely to be between ages 40-80  
+  * Stage 2 is the most common   
+  * Cases rise as patients grow closer to 60, but decrease the older patients are
+  * Very rarely did a patient die from Stage 1, regardless of age. 
+
+* Factors seemingly influence a patient's chances of survival post-surgery:
+  * Different stages of cancer
+  * The type of Breast Cancer 
+  * The type of Surgery
+
+
+**Limitations**:
+
+* Unspecific cause of death
+* Lack of information on the "Unknown" Patients
+* Possible sample bias in data set
+* Unequal spread of type of cancer patients had 
+
+Further analysis needed to ensure these limitations didn't impact the results.
+
+
+
